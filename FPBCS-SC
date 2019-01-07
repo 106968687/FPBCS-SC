@@ -1,0 +1,89 @@
+pragma solidity ^0.4.16;
+
+contract FPBCSSC{
+    bool public status;
+    address public owner;
+    string public contractName;
+    Contract[] public contractContents;
+    Party[] public bothSides;
+    uint public numberOfSalesManagers;
+    mapping (address => uint) public salesManagerId;
+    SalesManager[] public salesManagers;
+    
+    event ContractAdded (address OwnerAddress, string ContractName, string ContractContents);
+	event PartyAdded (address SalesManagerAddress, address ClientAddress, string SigningTime);
+    event SalesManagerAdded (address SalesManagerAddress, string SalesManagerDelegate, string SalesManagerNotes);
+    event SalesManagerRemoved(address SalesManagerAddress);
+    event StatusChanged(string Status);
+
+    struct Contract {
+        address owner;
+	    string ctName;
+		string ctContents;        
+	    uint contractSince;
+    }
+    struct Party {
+        address salesManager;
+	    address client;
+        string time;
+	    uint partySince;
+    } 
+    struct SalesManager {
+        address salesManager;
+	    string delegate;
+	    string notes;
+	    uint salesManagerSince;
+    }
+    modifier onlyowner {
+        require (msg.sender == owner);
+	_;
+    }
+
+    function FPBCSSC (string enterContractName) public {
+        owner = msg.sender;
+	    status = true;
+	    addSalesManager (0,"","");
+	    contractName = enterContractName;
+        numberOfSalesManagers = 0;		
+	    addContract (0,"","");
+	    addParty (0,0,"");	
+    }
+    function changeStatus (bool deactivate) onlyowner public {
+        if (deactivate)
+	    {status = false;}
+	    StatusChanged ("Smart Contract Deactivated");
+    }
+    function addContract (address ownerAddress, string coName, string coContents) onlyowner public {
+        require (status = true);
+	    uint id = contractContents.length++;
+        contractContents[id] = Contract ({owner: ownerAddress, ctName: coName, ctContents: coContents, contractSince: now});
+	ContractAdded (ownerAddress, coName, coContents);        
+    }
+    function addParty (address salesManagerAddress, address clientAddress, string signingTime) onlyowner public {
+        require (status = true);
+	    uint id = bothSides.length++;
+	    bothSides[id] = Party ({salesManager: salesManagerAddress, client: clientAddress, time: signingTime, partySince: now});
+	PartyAdded (salesManagerAddress, clientAddress, signingTime);
+    }
+    function addSalesManager (address salesManagerAddress, string salesManagerDelegate, string salesManagerNotes) onlyowner public {
+        require (status = true);
+	    uint id = salesManagerId[salesManagerAddress];
+	    if (id == 0) {
+	    salesManagerId[salesManagerAddress] = salesManagers.length;
+	    id = salesManagers.length++;
+	}
+	    salesManagers[id] = SalesManager ({salesManager: salesManagerAddress, salesManagerSince: now, delegate: salesManagerDelegate, notes: salesManagerNotes});
+        SalesManagerAdded (salesManagerAddress, salesManagerDelegate, salesManagerNotes);
+	    numberOfSalesManagers++;
+    }
+    function removeSalesManager (address salesManagerAddress) onlyowner public {
+        require (salesManagerId[salesManagerAddress] != 0);
+	    for (uint i = salesManagerId[salesManagerAddress]; i < salesManagers.length-1; i++){
+	    salesManagers[i] = salesManagers[i+1];
+	}
+	    delete salesManagers[salesManagers.length-1];
+	    salesManagers.length--;
+	    SalesManagerRemoved(salesManagerAddress);
+	    numberOfSalesManagers--;
+    }
+}
