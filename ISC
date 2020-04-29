@@ -1,0 +1,119 @@
+pragma solidity ^0.4.16;
+
+contract ISC {
+    bool public scstatus;
+    address public owner;
+    string public contractName;
+    Contract[] public contractContent;    
+    uint public numberOfSalesManagers;    
+	enum clientStatus{SalesManagerSigned, ClientSigned, InvestmentFinished, SuccessfulInvestment, Refunded}
+    mapping (address => Client) public clients;
+	uint public amount;
+	address public Arbiter;
+	address public salesmanager;
+    
+    event ContractAdded (address OwnerAddress, string ContractName, string ContractContents);	
+    event SCStatusChanged(string SCStatus);
+	event contractSignedBySalesManager(string info, bytes32 Signature);
+	event contractSignedByClient(string info, bytes32 Signature);
+	event ClientIsRight(address ClientAddress, address SalesManagerAddress, address ISCAddress, address Arbiter, string info);
+	event refundDone(address ClientAddress, address SalesManagerAddress, address ISCAddress);
+	event refundBasedonSalesManagerRequest(string info, address SalesManagerAddress);
+	event successfulInvestment(address ClientAddress, address SalesManagerAddress, address ISCAddress);
+
+    struct Contract {
+        address owner;
+	    string ctName;
+		string ctContents;        
+	    uint contractSince;
+    }
+	
+	struct Client {
+        clientStatus status;
+        int result;
+        bytes32 token;        
+    }
+	
+    modifier onlyOwner {
+        require (msg.sender == owner);
+	    _;
+    }
+	
+	modifier salesManagerPayment(){
+        require(msg.value == amount);
+        _;
+    }
+	
+	modifier clientPayment(){
+        require(msg.value == 9*amount);
+        _;
+    }
+	
+	 modifier onlyArbiter {
+        require (msg.sender == Arbiter);
+	    _;
+    }
+	
+	modifier onlySalesManager {
+        require (msg.sender == salesmanager);
+	    _;
+    }
+
+    constructor (string enterContractName) public {
+        owner = msg.sender;
+	    scstatus = true;	   
+	    contractName = enterContractName;        		
+	    addContract (0,"","");	    	
+		amount = 1 ether;
+    }
+	
+    function changeStatus (bool deactivate) onlyOwner public {
+        if (deactivate)
+	    {scstatus = false;}
+	    emit SCStatusChanged ("Smart Contract Deactivated");
+    }
+	
+    function addContract (address ownerAddress, string coName, string coContent) onlyOwner public {
+        require (scstatus = true);
+	    uint id = contractContent.length++;
+        contractContent[id] = Contract ({owner: ownerAddress, ctName: coName, ctContents: coContent, contractSince: now});
+	    emit ContractAdded (ownerAddress, coName, coContent);        
+    }
+		
+	function signedByDelegate (address salesManager, address client, address isc, uint salesManagerAmount) salesManagerPayment public payable {
+	    bytes32 signature = keccak256(salesManager, client, isc, salesManagerAmount);
+		emit contractSignedBySalesManager("The sales manager has signed the investment contract.", signature);
+		clients[client].status = clientStatus.SalesManagerSigned;		
+	}
+	
+	function salesManagerRefund(address client) onlySalesManager public payable{       
+		require(clients[client].status == clientStatus.ClientSigned);		
+        uint x = amount;
+        msg.sender.transfer(x); 
+        clients[client].status = clientStatus.Refunded;
+        emit refundBasedonSalesManagerRequest("The sales manager has been refunded.", msg.sender);
+    }
+	
+	function signedByClient (address client, address salesManager, address isc, uint clientAmount) clientPayment public payable {
+	    require(clients[client].status == clientStatus.SalesManagerSigned);
+		bytes32 signature = keccak256(salesManager, client, isc, clientAmount);
+		emit contractSignedByClient("The client has signed the investment contract.", signature);
+		clients[client].status = clientStatus.ClientSigned;
+	}
+	
+	function arbitrateDispute (address client, address salesManager, address isc, address arbiter, bool result) onlyArbiter public payable {
+	    require(clients[client].status == clientStatus.ClientSigned);
+		if(result){
+           emit ClientIsRight(client, salesManager, isc, arbiter, "The client is right.");
+		   uint x = amount;
+           client.transfer(9*x);          
+		   salesManager.transfer(x);
+           emit refundDone(client, salesManager, isc);
+           clients[client].status = clientStatus.InvestmentFinished;
+        }
+        else{
+          emit successfulInvestment(client, salesManager, isc);
+		  clients[client].status = clientStatus.SuccessfulInvestment;                     
+        }
+	}
+}
